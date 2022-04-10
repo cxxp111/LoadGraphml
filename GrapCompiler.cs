@@ -7,26 +7,24 @@ using System.Xml;
 namespace LoadGraphml
 {
 
-    public class Program
+    public class GrapCompiler
     {
 
         public static void Main(string[] args)
         {
-            string pattern = @"(\""[^\""]*\"")";
-            string input = @"LoadPlayerfalse652(123.456,false,1,""Player false"",""10.20,1.0,10"",""哈哈哈"",20,false,"""",true,"""",321.32)";
-            RegexOptions options = RegexOptions.Multiline;
+            string filePath = @"C:\Users\77547\Desktop\test.graphml";
+            CompileGraphml(filePath);
+            GraphmlAnalysis.Analysis(Regex.Replace(filePath, @"(?<=\.)graphml", "bytes"));
+        }
 
-            foreach (Match m in Regex.Matches(input, pattern, options))
-            {
-                Console.WriteLine("'{0}' found at index {1}.", m.Value, m.Index);
-            }
-
+        public static void CompileGraphml(string inputFilePath) {
+            string outputFilePath = Regex.Replace(inputFilePath, @"(?<=\.)graphml", "bytes");
+            Console.WriteLine("{0} ----> {1}", inputFilePath, outputFilePath);
             List<AutomateState> automateStates = new List<AutomateState>();
             List<AutomateTransition> automateTransitions = new List<AutomateTransition>();
 
             XmlDocument xml = new XmlDocument();
-            //xml.Load("D:\\UnityProject\\Client\\Wuxia6\\Assets\\Resources\\Graphml\\Source\\2072_jiguan_rigui.graphml");
-            xml.Load(@"C:\Users\77547\Desktop\test.graphml");
+            xml.Load(inputFilePath);
             XmlNamespaceManager nsmgr = new XmlNamespaceManager(xml.NameTable);
             XmlNodeList xmlNodeList = xml.GetElementsByTagName("node");
             for (int i = 0; i < xmlNodeList.Count; i++)
@@ -96,6 +94,29 @@ namespace LoadGraphml
                 }
                 automateTransitions.Add(automateTransition);
             }
+
+            ExportToFile(automateStates, automateTransitions, outputFilePath);
+        }
+        public static void ExportToFile(List<AutomateState> automateStates, List<AutomateTransition> automateTransitions, string outputFilePath)
+        {
+            MemoryStream memoryStream = new MemoryStream();
+            // 几个状态
+            StreamUtils.WriteInt32(memoryStream, automateStates.Count);
+            foreach (AutomateState automateState in automateStates)
+            {
+                automateState.Export(memoryStream);
+            }
+            // 几条线
+            StreamUtils.WriteInt32(memoryStream, automateTransitions.Count);
+            foreach (AutomateTransition automateTransition in automateTransitions)
+            {
+                automateTransition.Export(memoryStream);
+            }
+            FileStream fs = new FileStream(outputFilePath, FileMode.Create);
+            memoryStream.WriteTo(fs);
+            memoryStream.Close();
+            fs.Flush(); 
+            fs.Close();
         }
 
         public static XmlNode GetNode(XmlNode xmlNode, string nodeName)
@@ -121,6 +142,25 @@ namespace LoadGraphml
             public string id;
             public List<Instruction> instructions = new List<Instruction>();// 指令集
 
+            public void Export(MemoryStream memoryStream)
+            {
+                // 状态id 开头
+                StreamUtils.WriteString(memoryStream, id);
+                // 几个指令方法
+                StreamUtils.WriteInt32(memoryStream, instructions.Count);
+                foreach (Instruction instruction in instructions)
+                {
+                    StreamUtils.WriteString(memoryStream, instruction.methodName);// 方法名称
+                    StreamUtils.WriteInt32(memoryStream, instruction.methodParams.Count);// 参数数量
+                    foreach (MethodParam methodParam in instruction.methodParams)
+                    {
+                        StreamUtils.WriteInt32(memoryStream, methodParam.index);
+                        StreamUtils.WriteInt32(memoryStream, (int)methodParam.paramType);
+                        StreamUtils.WriteString(memoryStream, methodParam.value);
+                    }
+                }
+            }
+
         }
         public class AutomateTransition
         {
@@ -129,6 +169,29 @@ namespace LoadGraphml
             public string target;// 目标
             public int priority;// 优先级
             public List<Instruction> conditions = new List<Instruction>();// 条件指令集
+            public void Export(MemoryStream memoryStream)
+            {
+                
+                StreamUtils.WriteString(memoryStream, id);// 状态id 开头
+                StreamUtils.WriteString(memoryStream, source);// 源
+                StreamUtils.WriteString(memoryStream, target);// 目标
+                StreamUtils.WriteInt32(memoryStream, priority);// 权重
+                StreamUtils.WriteInt32(memoryStream, conditions.Count);// 指令数量
+                foreach (Instruction instruction in conditions)
+                {
+                    StreamUtils.WriteString(memoryStream, instruction.methodName);// 方法名称
+                    StreamUtils.WriteInt32(memoryStream, instruction.methodParams.Count);// 参数数量
+                    foreach (MethodParam methodParam in instruction.methodParams)
+                    {
+                        StreamUtils.WriteInt32(memoryStream, methodParam.index);// 参数下标
+                        StreamUtils.WriteInt32(memoryStream, (int)methodParam.paramType);// 参数类型
+                        StreamUtils.WriteString(memoryStream, methodParam.value);// 参数值
+                    }
+                    StreamUtils.WriteInt32(memoryStream, (int)instruction.ResultCompareValueType);// 返回值类型
+                    StreamUtils.WriteString(memoryStream, instruction.ResultCompareValue);// 返回值 值
+                    StreamUtils.WriteInt32(memoryStream, (int)instruction.resultOpt);
+                }
+            }
         }
         public struct Instruction
         {
@@ -312,10 +375,6 @@ namespace LoadGraphml
 
 
             }
-            public void ExportByte(MemoryStream memoryStream)
-            {
-
-            }
         }
 
         public struct MethodParam
@@ -344,5 +403,6 @@ namespace LoadGraphml
             Le = 4,// 结果与目标值比较为 小于等于
             Ge = 5,// 结果与目标值比较为 大于等于
         }
+     
     }
 }
