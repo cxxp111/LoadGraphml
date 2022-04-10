@@ -5,11 +5,15 @@ using System.Text;
 
 namespace LoadGraphml
 {
-    public class GraphmlAnalysis
+    public class AutomateComponent
     {
-        static AutomateState[] automateStates;
-        static AutomateTransation[] automateTransations;
-        public static void Analysis(string filePath)
+        private AutomateState[] automateStates;
+        private Dictionary<string, AutomateState> automateStatesDictionary;
+        private AutomateTransation[] automateTransations;
+        private AutomateState m_nextState;
+
+
+        public  void LoafFromFile(string filePath)
         {
             FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
             MemoryStream memoryStream = new MemoryStream();
@@ -24,6 +28,11 @@ namespace LoadGraphml
                 AutomateState automateState = new AutomateState();
                 automateState.Analysis(memoryStream);
                 automateStates[i] = automateState;
+                automateStatesDictionary[automateState.id] = automateState;
+                // 设置入口
+                if (automateState.instructions.Length>0 && automateState.instructions[0].methodName.Equals("Enter")) {
+                    m_nextState = automateState;
+                }
             }
             int transationNum = StreamUtils.ReadInt32(memoryStream);
             automateTransations = new AutomateTransation[transationNum];
@@ -33,6 +42,16 @@ namespace LoadGraphml
                 automateTransation.Analysis(memoryStream);
                 automateTransations[i] = automateTransation;
             }
+        }
+
+        public void Update() {
+
+            if (m_nextState == null)
+            {
+                return;
+            }
+
+
 
         }
 

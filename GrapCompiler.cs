@@ -14,7 +14,7 @@ namespace LoadGraphml
         {
             string filePath = @"C:\Users\77547\Desktop\test.graphml";
             CompileGraphml(filePath);
-            GraphmlAnalysis.Analysis(Regex.Replace(filePath, @"(?<=\.)graphml", "bytes"));
+            new AutomateComponent().LoafFromFile(Regex.Replace(filePath, @"(?<=\.)graphml", "bytes"));
         }
 
         public static void CompileGraphml(string inputFilePath) {
