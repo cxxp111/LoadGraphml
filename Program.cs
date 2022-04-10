@@ -85,11 +85,13 @@ namespace LoadGraphml
                 foreach (string conditionStr in conditions)
                 {
                     Instruction instruction = new Instruction();
-                    if (conditions.IndexOf(conditionStr) == 0)
+                    int index = conditions.IndexOf(conditionStr);
+                    string tempConditionStr = conditionStr.Trim();
+                    if (index == 0)
                     {
-                        instruction.ParsePriority(conditionStr, automateTransition.priority);
+                        instruction.ParsePriority(tempConditionStr, out automateTransition.priority, out tempConditionStr);
                     }
-                    instruction.ParseInstruction(conditionStr, MethodType.Condition);
+                    instruction.ParseInstruction(tempConditionStr, MethodType.Condition);
                     automateTransition.conditions.Add(instruction);
                 }
                 automateTransitions.Add(automateTransition);
@@ -125,7 +127,7 @@ namespace LoadGraphml
             public string id;
             public string source;// 源
             public string target;// 目标
-            public string priority;// 优先级
+            public int priority;// 优先级
             public List<Instruction> conditions = new List<Instruction>();// 条件指令集
         }
         public struct Instruction
@@ -135,10 +137,13 @@ namespace LoadGraphml
             public MethodType methodType;
             public List<MethodParam> methodParams;
             public ResultOpt resultOpt;
+            public ParamType ResultCompareValueType;
+            public string ResultCompareValue;
 
             private List<string> strParams;
             private List<float> numberParams;
             private List<bool> boolParams;
+            // 解析指令行
             public void ParseInstruction(string instruction, MethodType methodType)
             {
                 this.instruction = instruction.Trim();
@@ -165,16 +170,19 @@ namespace LoadGraphml
                 }
             }
             // 解析条件顺序
-            public void ParsePriority(string instruction, out int priority)
+            public void ParsePriority(string instruction, out int priority, out string outInstruction)
             {
+                string tempInstruction = instruction.Trim();
                 priority = 0;
-                Match priorityMatch = Regex.Match(instruction, "^\\[\\d\\]");
+                outInstruction = tempInstruction;
+                Match priorityMatch = Regex.Match(tempInstruction, "^\\[\\d+\\]");
                 if (priorityMatch.Success)
                 {
                     priority = int.Parse(priorityMatch.Value.Substring(1, priorityMatch.Length - 2));
-                    //outInstruction = instruction.Substring(priorityMatch.Index + priorityMatch.Length);
+                    outInstruction = tempInstruction.Substring(priorityMatch.Index + priorityMatch.Length);
                 }
             }
+            // 解析方法和参数
             public void ParseMethodAndParams(string instruction)
             {
                 string tempInstruction = instruction;
@@ -262,31 +270,44 @@ namespace LoadGraphml
 
                     }
                 }
-
+                // 匹配 比较字符
                 pattern = @"[<>=]=*";
                 m = Regex.Match(tempInstruction, pattern);
                 if (m.Success)
                 {
+                    tempInstruction = tempInstruction.Remove(0, m.Index + m.Value.Length).Trim();
+                    Match typeMatch;
+                    if ((typeMatch = Regex.Match(tempInstruction, @"(\""[^\""]*\"")")).Success)
+                    {
+                        this.ResultCompareValueType = ParamType.String;
+                    }
+                    else if ((typeMatch = Regex.Match(tempInstruction, @"\d+")).Success)
+                    {
+                        this.ResultCompareValueType = ParamType.Number;
+                    }
+                    else if ((typeMatch = Regex.Match(tempInstruction, @"true|false")).Success)
+                    {
+                        this.ResultCompareValueType = ParamType.Bool;
+                    }
+                    if (!typeMatch.Success) throw new Exception(tempInstruction + " 匹配右侧值失败");
+                    this.ResultCompareValue = typeMatch.Value;
+
                     if (m.Value.Equals("=="))
-                    {
                         this.resultOpt = ResultOpt.Eq;
-                    }
                     else if (m.Value.Equals("<="))
-                    {
                         this.resultOpt = ResultOpt.Le;
-                    }
                     else if (m.Value.Equals(">="))
-                    {
                         this.resultOpt = ResultOpt.Ge;
-                    }
                     else if (m.Value.Equals("<"))
-                    {
                         this.resultOpt = ResultOpt.Lt;
-                    }
                     else if (m.Value.Equals(">"))
-                    {
                         this.resultOpt = ResultOpt.Gt;
+
+                    if ((int)this.resultOpt >= 2 && this.ResultCompareValueType == ParamType.Bool)
+                    {
+                        throw new Exception("错误的比较 " + m.Value + " " + this.ResultCompareValue);
                     }
+
                 }
 
 
