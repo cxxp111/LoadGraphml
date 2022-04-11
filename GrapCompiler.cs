@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Xml;
 
 namespace LoadGraphml
@@ -12,8 +13,11 @@ namespace LoadGraphml
 
         public static void Main(string[] args)
         {
-            string filePath = @"C:\Users\77547\Desktop\test.graphml";
+            DateTime beginTime = DateTime.Now;            //获取开始时间  
+            string filePath = @"C:\Users\zfj\Desktop\test.graphml";
             CompileGraphml(filePath);
+            Console.WriteLine("程序的运行时间：{0} 毫秒", DateTime.Now.Subtract(beginTime).TotalMilliseconds);
+
             new AutomateComponent().LoafFromFile(Regex.Replace(filePath, @"(?<=\.)graphml", "bytes"));
         }
 
@@ -27,74 +31,87 @@ namespace LoadGraphml
             xml.Load(inputFilePath);
             XmlNamespaceManager nsmgr = new XmlNamespaceManager(xml.NameTable);
             XmlNodeList xmlNodeList = xml.GetElementsByTagName("node");
+       
+            List<Task> tasks = new List<Task>();
             for (int i = 0; i < xmlNodeList.Count; i++)
             {
                 XmlNode xmlNode = xmlNodeList.Item(i);
-                string id = xmlNode.Attributes["id"].Value;
-                XmlNode nodeLabel = GetNode(xmlNode, "y:NodeLabel");
-                if (nodeLabel == null) continue;
-                System.Console.WriteLine(nodeLabel.InnerText);
-
-                AutomateState automateState = new AutomateState();
-                automateState.id = id;
-                string nodeLabelText = nodeLabel.InnerText;
-                List<string> instructionStrs = new List<string>();
-                if (nodeLabelText.Contains("\r\n"))
-                    instructionStrs.AddRange(nodeLabelText.Split("\r\n"));
-                else if (nodeLabelText.Contains("\n"))
-                    instructionStrs.AddRange(nodeLabelText.Split("\n"));
-                else instructionStrs.Add(nodeLabelText);
-
-                foreach (string instructionStr in instructionStrs)
+                Task task = Task.Factory.StartNew(() =>
                 {
-                    Instruction instruction = new Instruction();
-                    instruction.ParseInstruction(instructionStr, MethodType.Normal);
-                    automateState.instructions.Add(instruction);
-                }
-                automateStates.Add(automateState);
+                    string id = xmlNode.Attributes["id"].Value;
+                    XmlNode nodeLabel = GetNode(xmlNode, "y:NodeLabel");
+                    if (nodeLabel == null) return ;
+                    //System.Console.WriteLine(nodeLabel.InnerText);
 
+                    AutomateState automateState = new AutomateState();
+                    automateState.id = id;
+                    string nodeLabelText = nodeLabel.InnerText;
+                    List<string> instructionStrs = new List<string>();
+                    if (nodeLabelText.Contains("\r\n"))
+                        instructionStrs.AddRange(nodeLabelText.Split("\r\n"));
+                    else if (nodeLabelText.Contains("\n"))
+                        instructionStrs.AddRange(nodeLabelText.Split("\n"));
+                    else instructionStrs.Add(nodeLabelText);
+
+                    foreach (string instructionStr in instructionStrs)
+                    {
+                        Instruction instruction = new Instruction();
+                        instruction.ParseInstruction(instructionStr, MethodType.Normal);
+                        automateState.instructions.Add(instruction);
+                    }
+                    lock (automateStates) {
+                        automateStates.Add(automateState);
+                    }
+                });
+                tasks.Add(task);
             }
-
+            
             XmlNodeList xmlEdgeList = xml.GetElementsByTagName("edge");
             for (int i = 0; i < xmlEdgeList.Count; i++)
             {
                 XmlNode xmlNode = xmlEdgeList.Item(i);
-                string id = xmlNode.Attributes["id"].Value;
-                string source = xmlNode.Attributes["source"].Value;
-                string target = xmlNode.Attributes["target"].Value;
-                XmlNode edgeLabel = GetNode(xmlNode, "y:EdgeLabel");
+                Task task = Task.Factory.StartNew(() => {
+                    string id = xmlNode.Attributes["id"].Value;
+                    string source = xmlNode.Attributes["source"].Value;
+                    string target = xmlNode.Attributes["target"].Value;
+                    XmlNode edgeLabel = GetNode(xmlNode, "y:EdgeLabel");
 
-                if (edgeLabel == null) continue;
-                System.Console.WriteLine(edgeLabel.InnerText);
+                    if (edgeLabel == null) return;
+                    //System.Console.WriteLine(edgeLabel.InnerText);
 
-                AutomateTransition automateTransition = new AutomateTransition();
-                automateTransition.id = id;
-                automateTransition.source = source;
-                automateTransition.target = target;
-                string edgeLabellText = edgeLabel.InnerText;
-                List<string> conditions = new List<string>();
-                if (edgeLabellText.Contains("\r\n"))
-                    conditions.AddRange(edgeLabellText.Split("\r\n"));
-                else if (edgeLabellText.Contains("\n"))
-                    conditions.AddRange(edgeLabellText.Split("\n"));
-                else
-                    conditions.Add(edgeLabellText);
+                    AutomateTransition automateTransition = new AutomateTransition();
+                    automateTransition.id = id;
+                    automateTransition.source = source;
+                    automateTransition.target = target;
+                    string edgeLabellText = edgeLabel.InnerText;
+                    List<string> conditions = new List<string>();
+                    if (edgeLabellText.Contains("\r\n"))
+                        conditions.AddRange(edgeLabellText.Split("\r\n"));
+                    else if (edgeLabellText.Contains("\n"))
+                        conditions.AddRange(edgeLabellText.Split("\n"));
+                    else
+                        conditions.Add(edgeLabellText);
 
-                foreach (string conditionStr in conditions)
-                {
-                    Instruction instruction = new Instruction();
-                    int index = conditions.IndexOf(conditionStr);
-                    string tempConditionStr = conditionStr.Trim();
-                    if (index == 0)
+                    foreach (string conditionStr in conditions)
                     {
-                        instruction.ParsePriority(tempConditionStr, out automateTransition.priority, out tempConditionStr);
+                        Instruction instruction = new Instruction();
+                        int index = conditions.IndexOf(conditionStr);
+                        string tempConditionStr = conditionStr.Trim();
+                        if (index == 0)
+                        {
+                            instruction.ParsePriority(tempConditionStr, out automateTransition.priority, out tempConditionStr);
+                        }
+                        instruction.ParseInstruction(tempConditionStr, MethodType.Condition);
+                        automateTransition.conditions.Add(instruction);
                     }
-                    instruction.ParseInstruction(tempConditionStr, MethodType.Condition);
-                    automateTransition.conditions.Add(instruction);
-                }
-                automateTransitions.Add(automateTransition);
+                    lock (automateTransitions) {
+                        automateTransitions.Add(automateTransition);
+                    }
+                   
+                });
+                tasks.Add(task);
             }
-
+            Task.WaitAll(tasks.ToArray());
             ExportToFile(automateStates, automateTransitions, outputFilePath);
         }
         public static void ExportToFile(List<AutomateState> automateStates, List<AutomateTransition> automateTransitions, string outputFilePath)
@@ -212,7 +229,8 @@ namespace LoadGraphml
                 this.instruction = instruction.Trim();
                 this.methodType = methodType;
                 this.methodParams = new List<MethodParam>();
-
+                this.methodName = "";
+                this.ResultCompareValue = "";
                 this.strParams = new List<string>();
                 this.numberParams = new List<float>();
                 this.boolParams = new List<bool>();
@@ -249,12 +267,12 @@ namespace LoadGraphml
             public void ParseMethodAndParams(string instruction)
             {
                 string tempInstruction = instruction;
-                Match m = Regex.Match(tempInstruction, @"^(?=\d*)(.+)(?=\()|Start|Exit");
+                Match m = Regex.Match(tempInstruction, @"^(?=\d*)([^\(]+)(?=\()|Start|Exit|Entry");
                 if (!m.Success)
                     throw new Exception(tempInstruction + " 匹配方法名失败");
                 this.methodName = m.Value;
                 tempInstruction = tempInstruction.Remove(m.Index, m.Value.Length);
-                Console.WriteLine("'{0}' found at index {1}.", m.Value, m.Index);
+                //Console.WriteLine("'{0}' found at index {1}.", m.Value, m.Index);
 
                 // 字符串 (\"[^\"]*\")
                 // bool ((?<=[(,])(true|false))
@@ -266,7 +284,7 @@ namespace LoadGraphml
                 m = Regex.Match(tempInstruction, pattern);
                 while (m.Success)
                 {
-                    Console.WriteLine("'{0}' found at index {1}.", m.Value, m.Index);
+                    //Console.WriteLine("'{0}' found at index {1}.", m.Value, m.Index);
                     tempInstruction = tempInstruction.Remove(m.Index, m.Value.Length);
                     tempInstruction = tempInstruction.Insert(m.Index, "replaceString-" + i++);
                     strParams.Add(m.Value.Trim().Substring(1, m.Value.Trim().Length - 2));
@@ -278,7 +296,7 @@ namespace LoadGraphml
                 m = Regex.Match(tempInstruction, pattern);
                 while (m.Success)
                 {
-                    Console.WriteLine("'{0}' found at index {1}.", m.Value, m.Index);
+                    //Console.WriteLine("'{0}' found at index {1}.", m.Value, m.Index);
                     tempInstruction = tempInstruction.Remove(m.Index, m.Value.Length);
                     tempInstruction = tempInstruction.Insert(m.Index, "replaceBool-" + i++);
                     boolParams.Add(m.Value.Trim().Equals("true"));
@@ -290,7 +308,7 @@ namespace LoadGraphml
                 m = Regex.Match(tempInstruction, pattern);
                 while (m.Success)
                 {
-                    Console.WriteLine("'{0}' found at index {1}.", m.Value, m.Index);
+                    //Console.WriteLine("'{0}' found at index {1}.", m.Value, m.Index);
                     tempInstruction = tempInstruction.Remove(m.Index, m.Value.Length);
                     tempInstruction = tempInstruction.Insert(m.Index, "replaceNumber-" + i++);
                     numberParams.Add(float.Parse(m.Value.Trim()));
@@ -301,7 +319,7 @@ namespace LoadGraphml
                 m = Regex.Match(tempInstruction, pattern);
                 if (m.Success && !string.IsNullOrEmpty(m.Value))
                 {
-                    tempInstruction = tempInstruction.Remove(m.Index, m.Value.Length);
+                   
                     string[] replaceParamStrs = m.Value.Split(",");
                     for (i = 0; i < replaceParamStrs.Length; i++)
                     {
@@ -332,6 +350,7 @@ namespace LoadGraphml
                         this.methodParams.Add(methodParam);
 
                     }
+                    tempInstruction = tempInstruction.Remove(m.Index, m.Value.Length);
                 }
                 // 匹配 比较字符
                 pattern = @"[<>=]=*";
@@ -344,7 +363,7 @@ namespace LoadGraphml
                     {
                         this.ResultCompareValueType = ParamType.String;
                     }
-                    else if ((typeMatch = Regex.Match(tempInstruction, @"\d+")).Success)
+                    else if ((typeMatch = Regex.Match(tempInstruction, @"\d+\.*\d*")).Success)
                     {
                         this.ResultCompareValueType = ParamType.Number;
                     }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -8,12 +9,12 @@ namespace LoadGraphml
     public class AutomateComponent
     {
         private AutomateState[] automateStates;
-        private Dictionary<string, AutomateState> automateStatesDictionary;
+        private Dictionary<string, AutomateState> automateStatesDictionary = new Dictionary<string, AutomateState>();
         private AutomateTransation[] automateTransations;
         private AutomateState m_nextState;
 
 
-        public  void LoafFromFile(string filePath)
+        public void LoafFromFile(string filePath)
         {
             FileStream fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
             MemoryStream memoryStream = new MemoryStream();
@@ -30,7 +31,8 @@ namespace LoadGraphml
                 automateStates[i] = automateState;
                 automateStatesDictionary[automateState.id] = automateState;
                 // 设置入口
-                if (automateState.instructions.Length>0 && automateState.instructions[0].methodName.Equals("Enter")) {
+                if (automateState.instructions.Length > 0 && automateState.instructions[0].methodName.Equals("Enter"))
+                {
                     m_nextState = automateState;
                 }
             }
@@ -42,9 +44,12 @@ namespace LoadGraphml
                 automateTransation.Analysis(memoryStream);
                 automateTransations[i] = automateTransation;
             }
+            //string json = JsonConvert.SerializeObject(automateStates );
+            // string json1 = JsonConvert.SerializeObject(automateTransations);
         }
 
-        public void Update() {
+        public void Update()
+        {
 
             if (m_nextState == null)
             {
@@ -68,17 +73,19 @@ namespace LoadGraphml
                 for (int i = 0; i < instructionNum; i++)
                 {
                     this.instructions[i] = new Instruction();
-                    this.instructions[i].Analysis(memoryStream,MethodType.Normal);
+                    this.instructions[i].Analysis(memoryStream, MethodType.Normal);
                 }
             }
         }
-        class AutomateTransation {
+        class AutomateTransation
+        {
             public string id;
             public string source;// 源
             public string target;// 目标
             public int priority;// 优先级
             public Instruction[] instructions;// 条件指令集
-            public void Analysis(MemoryStream memoryStream) {
+            public void Analysis(MemoryStream memoryStream)
+            {
                 this.id = StreamUtils.ReadString(memoryStream);
                 this.source = StreamUtils.ReadString(memoryStream);
                 this.target = StreamUtils.ReadString(memoryStream);
@@ -95,7 +102,7 @@ namespace LoadGraphml
         struct Instruction
         {
             public string methodName;
-            public MethodParam [] methodParams;
+            public MethodParam[] methodParams;
             public ResultOpt resultOpt;
             public ParamType ResultCompareValueType;
             public string ResultCompareValue;
