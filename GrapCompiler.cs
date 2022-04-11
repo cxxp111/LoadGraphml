@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Xml;
 
@@ -13,17 +14,30 @@ namespace LoadGraphml
 
         public static void Main(string[] args)
         {
-            DateTime beginTime = DateTime.Now;            //获取开始时间  
+            DateTime beginTime = DateTime.Now;
             string filePath = @"C:\Users\zfj\Desktop\test.graphml";
-            CompileGraphml(filePath);
-            Console.WriteLine("程序的运行时间：{0} 毫秒", DateTime.Now.Subtract(beginTime).TotalMilliseconds);
+            List<Task> tasks = new List<Task>();
+            for (int i = 0; i < 1; i++)
+            {
+                tasks.Add(Task.Factory.StartNew(() =>
+                {
+                    CompileGraphml(filePath);
+                }));
+            }
+            Task.WaitAll(tasks.ToArray());
+            Console.WriteLine("编译的运行时间：{0} 毫秒", DateTime.Now.Subtract(beginTime).TotalMilliseconds);
 
-            new AutomateComponent().LoafFromFile(Regex.Replace(filePath, @"(?<=\.)graphml", "bytes"));
+            AutomateManager.Instance.LoadAutomateScript(Regex.Replace(filePath, @"(?<=\.)graphml", "bytes"));
+            while (AutomateManager.Instance.runingAutomateScripts.Count > 0)
+            {
+                AutomateManager.Instance.Update();
+                Thread.Sleep(TimeSpan.FromMilliseconds(1000f / 100f));
+            }
         }
 
         public static void CompileGraphml(string inputFilePath) {
             string outputFilePath = Regex.Replace(inputFilePath, @"(?<=\.)graphml", "bytes");
-            Console.WriteLine("{0} ----> {1}", inputFilePath, outputFilePath);
+            //Console.WriteLine("{0} ----> {1}", inputFilePath, outputFilePath);
             List<AutomateState> automateStates = new List<AutomateState>();
             List<AutomateTransition> automateTransitions = new List<AutomateTransition>();
 
@@ -76,14 +90,14 @@ namespace LoadGraphml
                     string target = xmlNode.Attributes["target"].Value;
                     XmlNode edgeLabel = GetNode(xmlNode, "y:EdgeLabel");
 
-                    if (edgeLabel == null) return;
+                    //if (edgeLabel == null) return;
                     //System.Console.WriteLine(edgeLabel.InnerText);
 
                     AutomateTransition automateTransition = new AutomateTransition();
                     automateTransition.id = id;
                     automateTransition.source = source;
                     automateTransition.target = target;
-                    string edgeLabellText = edgeLabel.InnerText;
+                    string edgeLabellText = edgeLabel == null ? "" : edgeLabel.InnerText;
                     List<string> conditions = new List<string>();
                     if (edgeLabellText.Contains("\r\n"))
                         conditions.AddRange(edgeLabellText.Split("\r\n"));
@@ -94,20 +108,20 @@ namespace LoadGraphml
 
                     foreach (string conditionStr in conditions)
                     {
-                        Instruction instruction = new Instruction();
                         int index = conditions.IndexOf(conditionStr);
                         string tempConditionStr = conditionStr.Trim();
+                        Instruction instruction = new Instruction();
+                        // 先解析第0行的优先级
                         if (index == 0)
-                        {
                             instruction.ParsePriority(tempConditionStr, out automateTransition.priority, out tempConditionStr);
-                        }
                         instruction.ParseInstruction(tempConditionStr, MethodType.Condition);
                         automateTransition.conditions.Add(instruction);
                     }
-                    lock (automateTransitions) {
+                    lock (automateTransitions)
+                    {
                         automateTransitions.Add(automateTransition);
                     }
-                   
+
                 });
                 tasks.Add(task);
             }
@@ -234,20 +248,15 @@ namespace LoadGraphml
                 this.strParams = new List<string>();
                 this.numberParams = new List<float>();
                 this.boolParams = new List<bool>();
+                if (string.IsNullOrEmpty(this.instruction)) return;
 
                 if (this.methodType == MethodType.Normal)
                 {
-                    if (string.IsNullOrEmpty(this.instruction)) return;
                     this.ParseMethodAndParams(this.instruction);
-
                 }
                 else if (this.methodType == MethodType.Condition)
                 {
-                    if (string.IsNullOrEmpty(this.instruction)) return;
-                    string tempInstruction = this.instruction;
-
-                    if (string.IsNullOrEmpty(tempInstruction)) return;
-                    this.ParseMethodAndParams(tempInstruction);
+                    this.ParseMethodAndParams(this.instruction);
                 }
             }
             // 解析条件顺序
@@ -267,7 +276,7 @@ namespace LoadGraphml
             public void ParseMethodAndParams(string instruction)
             {
                 string tempInstruction = instruction;
-                Match m = Regex.Match(tempInstruction, @"^(?=\d*)([^\(]+)(?=\()|Start|Exit|Entry");
+                Match m = Regex.Match(tempInstruction, @"^(?=\d*)([^\(]+)(?=\()|Start|Exit|Entry|Enter");
                 if (!m.Success)
                     throw new Exception(tempInstruction + " 匹配方法名失败");
                 this.methodName = m.Value;
