@@ -15,7 +15,7 @@ namespace LoadGraphml
         public static void Main(string[] args)
         {
             DateTime beginTime = DateTime.Now;
-            string filePath = @"C:\Users\zfj\Desktop\test.graphml";
+            string filePath = @"./test.graphml";
             List<Task> tasks = new List<Task>();
             for (int i = 0; i < 1; i++)
             {
@@ -55,7 +55,6 @@ namespace LoadGraphml
                     string id = xmlNode.Attributes["id"].Value;
                     XmlNode nodeLabel = GetNode(xmlNode, "y:NodeLabel");
                     if (nodeLabel == null) return ;
-                    //System.Console.WriteLine(nodeLabel.InnerText);
 
                     AutomateState automateState = new AutomateState();
                     automateState.id = id;
@@ -89,9 +88,6 @@ namespace LoadGraphml
                     string source = xmlNode.Attributes["source"].Value;
                     string target = xmlNode.Attributes["target"].Value;
                     XmlNode edgeLabel = GetNode(xmlNode, "y:EdgeLabel");
-
-                    //if (edgeLabel == null) return;
-                    //System.Console.WriteLine(edgeLabel.InnerText);
 
                     AutomateTransition automateTransition = new AutomateTransition();
                     automateTransition.id = id;
