@@ -11,17 +11,17 @@ namespace LoadGraphml
     // 自动脚本
     public class AutomateScriptContext
     {
-        private AutomateState[] automateStates;// 所有的状态
-        private Dictionary<string, AutomateState> dic_AutomateStates = new Dictionary<string, AutomateState>();// 所有的状态字典
-        private AutomateTransation[] automateTransations;// 所有的连线
-        private Dictionary<string, List<AutomateTransation>> dic_AutomateTransations = new Dictionary<string, List<AutomateTransation>>();// 连线字典方便查询
+        private AutomateState[] automateStates; // 所有的状态
+        private Dictionary<string, AutomateState> dic_AutomateStates = new Dictionary<string, AutomateState>(); // 所有的状态字典
+        private AutomateTransation[] automateTransations; // 所有的连线
+        private Dictionary<string, List<AutomateTransation>> dic_AutomateTransations = new Dictionary<string, List<AutomateTransation>>(); // 连线字典方便查询
 
-        private AutomateState m_CurrentState;// 当前状态
-        private Queue<MethodParam> queue_MethodParams = new Queue<MethodParam>();// 当前调用指令的参数
-        private Dictionary<string, MethodParam> dic_GlobalParams = new Dictionary<string, MethodParam>();// 当前脚本全局参数
-        private MethodParam m_TransationResult;// 指令调用结果
-        private bool m_NeedCheckTransations = false;// 是否需要重新判断
-        private bool m_CanToNextState = true;// 是否可以到下一状态
+        private AutomateState m_CurrentState; // 当前状态
+        private Queue<MethodParam> queue_MethodParams = new Queue<MethodParam>(); // 当前调用指令的参数
+        private Dictionary<string, MethodParam> dic_GlobalParams = new Dictionary<string, MethodParam>(); // 当前脚本全局参数
+        private MethodParam m_TransationResult; // 指令调用结果
+        private bool m_NeedCheckTransations = false; // 是否需要重新判断
+        private bool m_CanToNextState = true; // 是否可以到下一状态
 
         public bool scriptFinished = false;
 
@@ -46,6 +46,7 @@ namespace LoadGraphml
                     m_CurrentState = automateState;
                 }
             }
+
             int transationNum = StreamUtils.ReadInt32(memoryStream);
             automateTransations = new AutomateTransation[transationNum];
             for (int i = 0; i < transationNum; i++)
@@ -65,6 +66,7 @@ namespace LoadGraphml
                 m_CurrentState = null;
                 scriptFinished = true;
             }
+
             if (m_CurrentState == null || scriptFinished == true) return;
             if (m_NeedCheckTransations)
             {
@@ -81,15 +83,15 @@ namespace LoadGraphml
                     GetNextState();
                 }
             }
-           
         }
+
         // 执行当前的状态 指令
         public void DoCurrentState()
         {
             if (m_CurrentState == null) return;
 
             m_CanToNextState = true;
-            
+
             for (int i = 0; i < m_CurrentState.instructions.Length; i++)
             {
                 Instruction instruction = m_CurrentState.instructions[i];
@@ -97,6 +99,7 @@ namespace LoadGraphml
                 if (doInstructionResult == false) m_CanToNextState = false;
             }
         }
+
         // 获取下一个状态
         public void GetNextState()
         {
@@ -107,7 +110,7 @@ namespace LoadGraphml
             dic_AutomateTransations.TryGetValue(sourceId, out targetAutomateTransations);
             if (targetAutomateTransations == null) targetAutomateTransations = new List<AutomateTransation>();
             if (targetAutomateTransations.Count >= 2)
-                targetAutomateTransations.Sort((v1, v2) => { return v1.priority==v2.priority?0: v1.priority < v2.priority ? 1 : -1; });
+                targetAutomateTransations.Sort((v1, v2) => { return v1.priority == v2.priority ? 0 : v1.priority < v2.priority ? 1 : -1; });
             bool toNextState = false;
             AutomateTransation successAutomateTransation = null;
             for (int i = 0; i < targetAutomateTransations.Count; i++)
@@ -120,6 +123,7 @@ namespace LoadGraphml
                     break;
                 }
             }
+
             if (toNextState)
             {
                 m_CurrentState = dic_AutomateStates[successAutomateTransation.target];
@@ -130,6 +134,7 @@ namespace LoadGraphml
                 m_NeedCheckTransations = true;
             }
         }
+
         // 检查这条连线的指令是否可以通过
         public bool CheckTransation(AutomateTransation automateTransation)
         {
@@ -138,16 +143,18 @@ namespace LoadGraphml
             for (int i = 0; i < automateTransation.instructions.Length; i++)
             {
                 Instruction instruction = automateTransation.instructions[i];
-                if (!DoInstruction(instruction,true))
+                if (!DoInstruction(instruction, true))
                 {
                     checkResult = false;
                     break;
                 }
             }
+
             return checkResult;
         }
+
         // 执行指令
-        public bool DoInstruction(Instruction instruction,bool isTransation = false)
+        public bool DoInstruction(Instruction instruction, bool isTransation = false)
         {
             if (string.IsNullOrEmpty(instruction.methodName) ||
                 instruction.methodName.Equals("Start") ||
@@ -170,7 +177,7 @@ namespace LoadGraphml
 
             bool invokeResult = automateHandle.Invoke(this);
 
-            if (!isTransation) return true;// 如果是状态直接返回true 表示通过
+            if (!isTransation) return true; // 如果是状态直接返回true 表示通过
             // 以下都是判断连线条件结果
             if (string.IsNullOrEmpty(instruction.resultCompareValue) && instruction.resultOpt == ResultOpt.None)
                 return invokeResult;
@@ -179,11 +186,13 @@ namespace LoadGraphml
                 Console.WriteLine("Error: function name [{0}] need set a result!", instruction.methodName);
                 return false;
             }
+
             if (instruction.resultCompareValueType != this.m_TransationResult.paramType)
             {
                 Console.WriteLine("Error: function name [{0}] result type error!", instruction.methodName);
                 return false;
             }
+
             if (instruction.resultCompareValueType == ParamType.Bool)
                 return this.Compare(this.m_TransationResult.toBool, bool.Parse(instruction.resultCompareValue), instruction.resultOpt);
             else if (instruction.resultCompareValueType == ParamType.Number)
@@ -204,6 +213,7 @@ namespace LoadGraphml
 
             return true;
         }
+
         private bool Compare<T>(T v1, T v2, ResultOpt compareOpt)
         {
             if (typeof(T) == typeof(string))
@@ -242,13 +252,16 @@ namespace LoadGraphml
                 if (compareOpt == ResultOpt.Lt) return tmpV1 < tmpV2;
                 if (compareOpt == ResultOpt.Gt) return tmpV1 > tmpV2;
             }
+
             return false;
         }
+
         // 获取当前指令的一个变量
         public MethodParam GetOneMethodParam()
         {
             return this.queue_MethodParams.Dequeue();
         }
+
         // 放一个当前脚本的全局变量
         public void PushGlobalExtendParam<T>(string key, T value)
         {
@@ -258,12 +271,15 @@ namespace LoadGraphml
             methodParam.paramType = this.GetParamType(value);
             this.dic_GlobalParams[key] = methodParam;
         }
+
         // 获得一个当前脚本的全局变量
-        public MethodParam GetGlobalExtendParam(string key) {
+        public MethodParam GetGlobalExtendParam(string key)
+        {
             MethodParam methodParam = null;
             this.dic_GlobalParams.TryGetValue(key, out methodParam);
             return methodParam;
         }
+
         // 放指令执行结果
         public void PushResult<T>(T value)
         {
@@ -282,6 +298,7 @@ namespace LoadGraphml
                 return ParamType.Bool;
             else return ParamType.String;
         }
+
         // 判断是否是最后一个状态
         private bool IsFinalState()
         {
@@ -291,11 +308,14 @@ namespace LoadGraphml
             List<AutomateTransation> targetAutomateTransations = null;
             dic_AutomateTransations.TryGetValue(sourceId, out targetAutomateTransations);
             // 没有连线就是最后一个了，指令一般都是 Exit，这里就不用判断了
-            if (targetAutomateTransations != null) {
+            if (targetAutomateTransations != null)
+            {
                 return false;
             }
+
             return true;
         }
+
         public class AutomateState
         {
             public string id;
@@ -313,13 +333,15 @@ namespace LoadGraphml
                 }
             }
         }
+
         public class AutomateTransation
         {
             public string id;
-            public string source;// 源
-            public string target;// 目标
-            public int priority;// 优先级
-            public Instruction[] instructions;// 条件指令集
+            public string source; // 源
+            public string target; // 目标
+            public int priority; // 优先级
+            public Instruction[] instructions; // 条件指令集
+
             public void Analysis(MemoryStream memoryStream)
             {
                 this.id = StreamUtils.ReadString(memoryStream);
@@ -335,6 +357,7 @@ namespace LoadGraphml
                 }
             }
         }
+
         public class Instruction
         {
             public string methodName;
@@ -342,6 +365,7 @@ namespace LoadGraphml
             public ResultOpt resultOpt;
             public ParamType resultCompareValueType;
             public string resultCompareValue;
+
             public void Analysis(MemoryStream memoryStream, MethodType methodType)
             {
                 this.methodName = StreamUtils.ReadString(memoryStream);
@@ -354,6 +378,7 @@ namespace LoadGraphml
                     this.methodParams[i].paramType = (ParamType)StreamUtils.ReadInt32(memoryStream);
                     this.methodParams[i].value = StreamUtils.ReadString(memoryStream);
                 }
+
                 if (methodType == MethodType.Condition)
                 {
                     this.resultCompareValueType = (ParamType)StreamUtils.ReadInt32(memoryStream);
@@ -362,6 +387,7 @@ namespace LoadGraphml
                 }
             }
         }
+
         public class MethodParam
         {
             public int index;
@@ -372,25 +398,28 @@ namespace LoadGraphml
             public bool toBool => bool.Parse(value);
             public float toFloat => float.Parse(value);
         }
+
         public enum MethodType
         {
-            Normal = 0,// 正常方法
-            Condition = 1,// 判断条件
+            Normal = 0, // 正常方法
+            Condition = 1, // 判断条件
         }
+
         public enum ParamType
         {
             Number = 0,
             String = 1,
             Bool = 2,
         }
+
         public enum ResultOpt
         {
-            None = 0,// 对结果没有判断
-            Eq = 1,// 结果与目标值比较为 相等
-            Lt = 2,// 结果与目标值比较为 小于
-            Gt = 3,// 结果与目标值比较为 大于
-            Le = 4,// 结果与目标值比较为 小于等于
-            Ge = 5,// 结果与目标值比较为 大于等于
+            None = 0, // 对结果没有判断
+            Eq = 1, // 结果与目标值比较为 相等
+            Lt = 2, // 结果与目标值比较为 小于
+            Gt = 3, // 结果与目标值比较为 大于
+            Le = 4, // 结果与目标值比较为 小于等于
+            Ge = 5, // 结果与目标值比较为 大于等于
         }
     }
 }

@@ -37,7 +37,7 @@ namespace LoadGraphml
 
         public static void CompileGraphml(string inputFilePath) {
             string outputFilePath = Regex.Replace(inputFilePath, @"(?<=\.)graphml", "bytes");
-            //Console.WriteLine("{0} ----> {1}", inputFilePath, outputFilePath);
+            Console.WriteLine("{0} ----> {1}", inputFilePath, outputFilePath);
             List<AutomateState> automateStates = new List<AutomateState>();
             List<AutomateTransition> automateTransitions = new List<AutomateTransition>();
 

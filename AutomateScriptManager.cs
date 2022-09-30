@@ -92,6 +92,7 @@ namespace LoadGraphml
         }
         public bool PlayAnimBySceneInteractiveState(AutomateScriptContext ctx)
         {
+            Console.WriteLine(ctx.GetOneMethodParam());
             Console.WriteLine("PlayAnimBySceneInteractiveState");
             return true;
         }
